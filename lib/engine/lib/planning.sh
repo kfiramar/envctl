@@ -2,8 +2,61 @@
 
 # Planning selection helpers.
 
+planning_dir_raw() {
+    local raw="${ENVCTL_PLANNING_DIR:-docs/planning}"
+    raw="${raw%/}"
+    if [ -z "$raw" ]; then
+        raw="docs/planning"
+    fi
+    printf '%s\n' "$raw"
+}
+
+planning_dir_path() {
+    local raw
+    raw=$(planning_dir_raw)
+    if [[ "$raw" = /* ]]; then
+        printf '%s\n' "$raw"
+        return 0
+    fi
+    printf '%s/%s\n' "$BASE_DIR" "$raw"
+}
+
+planning_dir_display() {
+    local dir
+    dir=$(planning_dir_path)
+    if [[ "$dir" == "$BASE_DIR/"* ]]; then
+        printf '%s\n' "${dir#"$BASE_DIR"/}"
+        return 0
+    fi
+    printf '%s\n' "$dir"
+}
+
+planning_file_path() {
+    local rel=${1:-}
+    local planning_dir
+    planning_dir=$(planning_dir_path)
+    printf '%s/%s\n' "$planning_dir" "$rel"
+}
+
+planning_normalize_selection_token() {
+    local token=${1:-}
+    local planning_raw planning_dir
+    planning_raw=$(planning_dir_raw)
+    planning_dir=$(planning_dir_path)
+
+    token="${token#./}"
+    token="${token#docs/planning/}"
+    token="${token#${planning_raw}/}"
+    token="${token#${planning_dir}/}"
+    if [[ "$planning_raw" != /* ]]; then
+        token="${token#${BASE_DIR}/${planning_raw}/}"
+    fi
+    printf '%s\n' "$token"
+}
+
 list_planning_files() {
-    local planning_dir="$BASE_DIR/docs/planning"
+    local planning_dir
+    planning_dir=$(planning_dir_path)
     if [ ! -d "$planning_dir" ]; then
         return 1
     fi
@@ -14,7 +67,8 @@ list_planning_files() {
 }
 
 list_done_planning_files() {
-    local planning_dir="$BASE_DIR/docs/planning"
+    local planning_dir
+    planning_dir=$(planning_dir_path)
     local done_dir="$planning_dir/Done"
     if [ ! -d "$done_dir" ]; then
         return 0
@@ -203,7 +257,9 @@ select_planning_files() {
     PLANNING_DONE_FILES=()
 
     if [ ${#files[@]} -eq 0 ]; then
-        echo -e "${RED}No planning files found in docs/planning.${NC}" >&2
+        local planning_display
+        planning_display=$(planning_dir_display)
+        echo -e "${RED}No planning files found in ${planning_display}.${NC}" >&2
         return 1
     fi
     declare -A PLANNING_EXISTING_COUNTS=()
@@ -231,7 +287,9 @@ resolve_planning_files() {
         done < <(list_planning_files)
 
         if [ ${#available_plans[@]} -eq 0 ]; then
-            echo -e "${RED}No planning files found in docs/planning.${NC}" >&2
+            local planning_display
+            planning_display=$(planning_dir_display)
+            echo -e "${RED}No planning files found in ${planning_display}.${NC}" >&2
             return 1
         fi
 
@@ -245,7 +303,7 @@ resolve_planning_files() {
 
             local match=""
             local cleaned="$token"
-            cleaned="${cleaned#docs/planning/}"
+            cleaned=$(planning_normalize_selection_token "$cleaned")
             if [[ "$cleaned" != *.md ]]; then
                 cleaned="${cleaned}.md"
             fi
@@ -309,7 +367,7 @@ resolve_planning_files() {
 
 planning_feature_name() {
     local rel="$1"
-    rel="${rel#docs/planning/}"
+    rel="$(planning_normalize_selection_token "$rel")"
     local folder="${rel%%/*}"
     local file="${rel##*/}"
     file="${file%.md}"
@@ -329,7 +387,9 @@ planning_existing_count() {
 planning_move_to_done() {
     local rel="$1"
     [ -n "$rel" ] || return 1
-    local src="$BASE_DIR/docs/planning/$rel"
+    local planning_dir
+    planning_dir=$(planning_dir_path)
+    local src="$planning_dir/$rel"
     if [ ! -f "$src" ]; then
         return 0
     fi
@@ -339,7 +399,7 @@ planning_move_to_done() {
     fi
     local base_name
     base_name="$(basename "$rel")"
-    local done_dir="$BASE_DIR/docs/planning/Done/${rel_dir}"
+    local done_dir="$planning_dir/Done/${rel_dir}"
     mkdir -p "$done_dir"
     local dest="$done_dir/$base_name"
     if [ -f "$dest" ]; then

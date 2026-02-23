@@ -10,7 +10,7 @@ Usage:
   ./run.sh [command] [options]
 
 Commands:
-  plan                         Create worktrees from planning selection and run with parallel tree startup (default)
+  plan                         Create worktrees from planning selection and run with parallel tree startup
   sequential-plan              Create worktrees from planning selection and run one-by-one (sequential startup)
   parallel-plan                Alias for plan
   dashboard                    Show runtime dashboard (services + health + run hints) and exit
@@ -26,9 +26,10 @@ Commands:
   errors                       Show explicit error diagnostics (implies --skip-startup)
 
 Options:
-  trees=true                   Run all trees (default)
+  trees=true                   Run all trees
   trees=false                  Run main project only
   main=true, --main            Run main project only
+  ENVCTL_DEFAULT_MODE=main|trees  Default startup mode when no mode flag is passed (default: main)
   fresh=true                   Force fresh dependency install
   --batch, -b                  Non-interactive mode
   --resume                     Resume previous session
@@ -46,6 +47,7 @@ Options:
   --parallel-plan [SELECTION]  Alias for --plan
   --planning-prs [SELECTION]
   --keep-plan                 Keep planning files in place (do not move to Done)
+  ENVCTL_PLANNING_DIR=<path>  Planning root path (default: docs/planning; relative to repo root or absolute)
   --seed-requirements-from-base    Seed per-tree DB/Redis from base (alias: --copy-db-storage)
   --no-seed-requirements-from-base Disable per-tree DB/Redis seeding (alias: --no-copy-db-storage)
   --command <cmd>              Run a single command non-interactively
@@ -238,6 +240,22 @@ run_all_trees_cli_parse_args() {
     local run_sh_command_analyze_mode="${RUN_SH_COMMAND_ANALYZE_MODE:-}"
     local run_sh_command_dashboard_interactive="${RUN_SH_COMMAND_DASHBOARD_INTERACTIVE:-false}"
     local -a run_sh_command_targets=()
+    local default_mode_raw="${ENVCTL_DEFAULT_MODE:-main}"
+    local default_mode=""
+
+    default_mode=$(printf '%s' "$default_mode_raw" | tr '[:upper:]' '[:lower:]')
+    case "$default_mode" in
+        trees)
+            trees_mode=true
+            ;;
+        main|"")
+            trees_mode=false
+            ;;
+        *)
+            errors+=("Invalid ENVCTL_DEFAULT_MODE: ${default_mode_raw} (expected: main or trees)")
+            trees_mode=false
+            ;;
+    esac
 
     if [ -n "${RUN_SH_COMMAND_TARGETS:-}" ]; then
         IFS=',' read -r -a run_sh_command_targets <<< "$RUN_SH_COMMAND_TARGETS"

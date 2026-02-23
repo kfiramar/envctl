@@ -956,7 +956,19 @@ run_all_trees_handle_planning_envs() {
 
         if [ "$create_count" -gt 0 ]; then
             echo -e "${CYAN}Setting up ${create_count} worktree(s) for ${plan_file} -> ${feature_name}...${NC}"
-            PLAN_FILE="$BASE_DIR/docs/planning/$plan_file" "$setup_script" "$feature_name" "$create_count"
+            local plan_path=""
+            if [ "$(type -t planning_file_path)" = "function" ]; then
+                plan_path=$(planning_file_path "$plan_file")
+            else
+                local planning_root="${ENVCTL_PLANNING_DIR:-docs/planning}"
+                planning_root="${planning_root%/}"
+                if [[ "$planning_root" = /* ]]; then
+                    plan_path="${planning_root}/${plan_file}"
+                else
+                    plan_path="${BASE_DIR}/${planning_root}/${plan_file}"
+                fi
+            fi
+            PLAN_FILE="$plan_path" "$setup_script" "$feature_name" "$create_count"
             if [ $? -ne 0 ]; then
                 echo -e "${RED}setup-worktrees.sh failed for ${feature_name}.${NC}"
                 return 3
