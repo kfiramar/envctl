@@ -291,14 +291,18 @@ tree_uses_n8n() {
             return $?
         fi
     fi
+    if [ "${N8N_ENABLE:-true}" != "true" ]; then
+        if tree_usage_cache_enabled; then
+            TREE_N8N_CACHE["$tree_dir"]="false"
+        fi
+        return 1
+    fi
     local base_dir=""
     if [ -n "${BASE_DIR:-}" ]; then
         base_dir=$(cd "$BASE_DIR" && pwd -P 2>/dev/null) || base_dir="$BASE_DIR"
     fi
     if [ -n "$base_dir" ] && [ "$tree_dir" = "$base_dir" ]; then
-        if [ "${N8N_MAIN_ENABLE:-false}" != "true" ] && \
-            { [ -n "${MAIN_ENV_FILE_PATH:-}" ] || [ -n "${MAIN_ENV_FILE:-}" ] || \
-              [ -n "${MAIN_FRONTEND_ENV_FILE_PATH:-}" ] || [ -n "${MAIN_FRONTEND_ENV_FILE:-}" ]; }; then
+        if [ "${N8N_MAIN_ENABLE:-false}" != "true" ]; then
             if tree_usage_cache_enabled; then
                 TREE_N8N_CACHE["$tree_dir"]="false"
             fi
@@ -306,16 +310,55 @@ tree_uses_n8n() {
         fi
     fi
     local compose_file="${tree_dir%/}/docker-compose.yml"
-    if compose_file_has_service "$compose_file" "n8n"; then
+    if ! compose_file_has_service "$compose_file" "n8n"; then
         if tree_usage_cache_enabled; then
-            TREE_N8N_CACHE["$tree_dir"]="true"
+            TREE_N8N_CACHE["$tree_dir"]="false"
         fi
-        return 0
+        return 1
     fi
+
+    if [ -n "$base_dir" ] && [ "$tree_dir" != "$base_dir" ]; then
+        if [ "${N8N_ALL_TREES:-false}" = "true" ]; then
+            if tree_usage_cache_enabled; then
+                TREE_N8N_CACHE["$tree_dir"]="true"
+            fi
+            return 0
+        fi
+
+        local filter="${N8N_TREE_FILTER:-}"
+        if [ -n "$filter" ]; then
+            local identity=""
+            identity=$(worktree_identity_from_dir "$tree_dir" 2>/dev/null || true)
+            local feature_name=""
+            if [ -n "$identity" ]; then
+                feature_name="${identity%%|*}"
+            fi
+            if [ -z "$feature_name" ]; then
+                feature_name=$(basename "$tree_dir")
+            fi
+            local entry=""
+            IFS=',' read -r -a filter_entries <<< "$filter"
+            for entry in "${filter_entries[@]}"; do
+                entry=$(trim "$entry")
+                [ -z "$entry" ] && continue
+                if [ "$entry" = "$feature_name" ]; then
+                    if tree_usage_cache_enabled; then
+                        TREE_N8N_CACHE["$tree_dir"]="true"
+                    fi
+                    return 0
+                fi
+            done
+            if tree_usage_cache_enabled; then
+                TREE_N8N_CACHE["$tree_dir"]="false"
+            fi
+            return 1
+        fi
+    fi
+
     if tree_usage_cache_enabled; then
-        TREE_N8N_CACHE["$tree_dir"]="false"
+        TREE_N8N_CACHE["$tree_dir"]="true"
     fi
-    return 1
+    return 0
 }
 
 supabase_env_file_for_tree() {

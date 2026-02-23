@@ -5,6 +5,14 @@ setup() {
   BIN="$REPO_ROOT/bin/envctl"
 }
 
+expected_install_path_line() {
+  local bin_dir="$REPO_ROOT/bin"
+  if [[ "$bin_dir" == "$HOME/"* ]]; then
+    bin_dir="\$HOME/${bin_dir#"$HOME"/}"
+  fi
+  printf 'export PATH="%s:$PATH"' "$bin_dir"
+}
+
 @test "envctl errors when repo cannot be resolved" {
   run bash -lc '
     tmp=$(mktemp -d)
@@ -121,6 +129,7 @@ SCRIPT
   ' "$BIN"
   [ "$status" -eq 0 ]
   [[ "$output" == *"# >>> envctl PATH >>>"* ]]
+  [[ "$output" == *"$(expected_install_path_line)"* ]]
   [[ "$output" == *"# <<< envctl PATH <<<"* ]]
 }
 
