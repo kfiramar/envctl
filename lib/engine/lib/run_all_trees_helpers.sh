@@ -665,10 +665,6 @@ run_all_trees_resolve_main_environment() {
     main_uses_supabase=false
     main_skip_local_db=false
     local requirements_mode="${MAIN_REQUIREMENTS_MODE:-}"
-    if [ -z "$requirements_mode" ] && [ "$MAIN_MODE" = true ]; then
-        requirements_mode="local"
-        MAIN_REQUIREMENTS_MODE="local"
-    fi
 
     if [ "$requirements_mode" = "local" ]; then
         SUPABASE_MAIN_ENABLE=true

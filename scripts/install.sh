@@ -9,7 +9,42 @@ if [ "$mode" != "install" ] && [ "$mode" != "uninstall" ]; then
 fi
 shift || true
 
-shell_file="${HOME}/.zshrc"
+default_shell_file() {
+    local shell_name="${SHELL:-}"
+    shell_name="${shell_name##*/}"
+    case "$shell_name" in
+        zsh)
+            printf '%s/.zshrc\n' "$HOME"
+            ;;
+        bash)
+            if [ -f "${HOME}/.bash_profile" ] && [ ! -f "${HOME}/.bashrc" ]; then
+                printf '%s/.bash_profile\n' "$HOME"
+            else
+                printf '%s/.bashrc\n' "$HOME"
+            fi
+            ;;
+        *)
+            printf '%s/.profile\n' "$HOME"
+            ;;
+    esac
+}
+
+format_path_line() {
+    local bin_dir=$1
+    if [[ "$bin_dir" == "$HOME/"* ]]; then
+        bin_dir="\$HOME/${bin_dir#"$HOME"/}"
+    fi
+    printf 'export PATH="%s:$PATH"' "$bin_dir"
+}
+
+envctl_root_dir="${ENVCTL_ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}"
+envctl_bin_dir="${ENVCTL_BIN_DIR:-${envctl_root_dir%/}/bin}"
+if [ ! -d "$envctl_bin_dir" ]; then
+    echo "Unable to locate envctl bin directory: $envctl_bin_dir" >&2
+    exit 1
+fi
+
+shell_file="${ENVCTL_SHELL_FILE:-$(default_shell_file)}"
 dry_run=false
 
 while [ $# -gt 0 ]; do
@@ -43,7 +78,7 @@ done
 
 block_start="# >>> envctl PATH >>>"
 block_end="# <<< envctl PATH <<<"
-path_line='export PATH="$HOME/projects/envctl/bin:$PATH"'
+path_line="$(format_path_line "$envctl_bin_dir")"
 
 mkdir -p "$(dirname "$shell_file")"
 if [ ! -f "$shell_file" ]; then

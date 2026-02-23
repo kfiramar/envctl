@@ -155,6 +155,10 @@ start_postgres() {
         echo -e "${YELLOW}Skipping PostgreSQL container start (ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE is set)${NC}"
         return 0
     fi
+    if [ "${POSTGRES_MAIN_ENABLE:-true}" != "true" ]; then
+        echo -e "${YELLOW}Skipping PostgreSQL container start (POSTGRES_MAIN_ENABLE=false)${NC}"
+        return 0
+    fi
     echo -e "${BLUE}Checking PostgreSQL...${NC}"
 
     # Check if container exists
@@ -265,6 +269,14 @@ start_redis() {
         echo -e "${YELLOW}Skipping Redis container start (ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE is set)${NC}"
         return 0
     fi
+    if [ "${REDIS_ENABLE:-true}" != "true" ]; then
+        echo -e "${YELLOW}Skipping Redis container start (REDIS_ENABLE=false)${NC}"
+        return 0
+    fi
+    if [ "${REDIS_MAIN_ENABLE:-true}" != "true" ]; then
+        echo -e "${YELLOW}Skipping Redis container start (REDIS_MAIN_ENABLE=false)${NC}"
+        return 0
+    fi
     echo -e "${BLUE}Checking Redis...${NC}"
 
     # Check if container exists
@@ -366,6 +378,15 @@ start_redis() {
 }
 
 select_redis_port_for_main() {
+    if [ "${ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE:-false}" = "true" ]; then
+        return 0
+    fi
+    if [ "${REDIS_ENABLE:-true}" != "true" ]; then
+        return 0
+    fi
+    if [ "${REDIS_MAIN_ENABLE:-true}" != "true" ]; then
+        return 0
+    fi
     local desired="${REDIS_PORT:-$REDIS_PORT_BASE}"
     local actual=""
 
@@ -403,6 +424,59 @@ fi
 
 if [ "$(type -t tree_uses_n8n)" != "function" ]; then
     tree_uses_n8n() {
+        return 1
+    }
+fi
+
+if [ "$(type -t tree_uses_redis)" != "function" ]; then
+    tree_uses_redis() {
+        local tree_dir=${1:-}
+        [ -n "$tree_dir" ] || return 1
+        tree_dir=$(cd "$tree_dir" && pwd -P 2>/dev/null) || return 1
+
+        if [ "${REDIS_ENABLE:-true}" != "true" ]; then
+            return 1
+        fi
+
+        local base_dir=""
+        if [ -n "${BASE_DIR:-}" ]; then
+            base_dir=$(cd "$BASE_DIR" && pwd -P 2>/dev/null) || base_dir="$BASE_DIR"
+        fi
+
+        if [ -n "$base_dir" ] && [ "$tree_dir" = "$base_dir" ]; then
+            [ "${REDIS_MAIN_ENABLE:-true}" = "true" ]
+            return $?
+        fi
+
+        if [ "${REDIS_ALL_TREES:-true}" = "true" ]; then
+            return 0
+        fi
+
+        local filter="${REDIS_TREE_FILTER:-}"
+        [ -n "$filter" ] || return 1
+
+        local feature_name=""
+        if [ "$(type -t worktree_identity_from_dir)" = "function" ]; then
+            local identity=""
+            identity=$(worktree_identity_from_dir "$tree_dir" 2>/dev/null || true)
+            if [ -n "$identity" ]; then
+                feature_name="${identity%%|*}"
+            fi
+        fi
+        if [ -z "$feature_name" ]; then
+            feature_name=$(basename "$tree_dir")
+        fi
+
+        local entry=""
+        IFS=',' read -r -a filter_entries <<< "$filter"
+        for entry in "${filter_entries[@]}"; do
+            entry="${entry#"${entry%%[![:space:]]*}"}"
+            entry="${entry%"${entry##*[![:space:]]}"}"
+            [ -z "$entry" ] && continue
+            if [ "$entry" = "$feature_name" ]; then
+                return 0
+            fi
+        done
         return 1
     }
 fi
@@ -618,6 +692,10 @@ resolve_tree_requirement_ports() {
     if tree_uses_supabase "$tree_dir"; then
         uses_supabase=true
     fi
+    local uses_redis=false
+    if tree_uses_redis "$tree_dir"; then
+        uses_redis=true
+    fi
     local project_name=""
     if [ "$uses_supabase" = true ]; then
         project_name="${SUPABASE_TREE_PROJECTS[$tree_dir]:-}"
@@ -651,15 +729,17 @@ resolve_tree_requirement_ports() {
     fi
 
     local redis_container=""
-    redis_container=$(requirement_container_name "$REDIS_CONTAINER_NAME" "$tree_dir" 2>/dev/null || true)
-    if [ -n "$redis_container" ]; then
-        local existing_redis_port=""
-        existing_redis_port=$(lock_requirement_port_from_container "$redis_container" "6379" "${tree_dir}:redis")
-        if [ -n "$existing_redis_port" ]; then
-            resolved_redis_port="$existing_redis_port"
-            redis_locked=true
-            if [ "$(type -t debug_log_line)" = "function" ] && [ "$(type -t debug_enabled)" = "function" ] && debug_enabled; then
-                debug_log_line "TRACE" "requirements.port.lock tree=${tree_dir} service=redis source=container container=${redis_container} port=${existing_redis_port}"
+    if [ "$uses_redis" = true ]; then
+        redis_container=$(requirement_container_name "$REDIS_CONTAINER_NAME" "$tree_dir" 2>/dev/null || true)
+        if [ -n "$redis_container" ]; then
+            local existing_redis_port=""
+            existing_redis_port=$(lock_requirement_port_from_container "$redis_container" "6379" "${tree_dir}:redis")
+            if [ -n "$existing_redis_port" ]; then
+                resolved_redis_port="$existing_redis_port"
+                redis_locked=true
+                if [ "$(type -t debug_log_line)" = "function" ] && [ "$(type -t debug_enabled)" = "function" ] && debug_enabled; then
+                    debug_log_line "TRACE" "requirements.port.lock tree=${tree_dir} service=redis source=container container=${redis_container} port=${existing_redis_port}"
+                fi
             fi
         fi
     fi
@@ -688,7 +768,7 @@ resolve_tree_requirement_ports() {
     if [ "$db_locked" = false ]; then
         resolved_db_port=$(read_env_value "$env_file" "DB_PORT")
     fi
-    if [ "$redis_locked" = false ]; then
+    if [ "$uses_redis" = true ] && [ "$redis_locked" = false ]; then
         resolved_redis_port=$(read_env_value "$env_file" "REDIS_PORT")
     fi
     if [ "$n8n_locked" = false ] && tree_uses_n8n "$tree_dir"; then
@@ -710,13 +790,13 @@ resolve_tree_requirement_ports() {
             if [ "$db_locked" = false ] && [ -n "$cfg_db" ]; then
                 resolved_db_port="$cfg_db"
             fi
-            if [ "$redis_locked" = false ] && [ -n "$cfg_redis" ]; then
+            if [ "$uses_redis" = true ] && [ "$redis_locked" = false ] && [ -n "$cfg_redis" ]; then
                 resolved_redis_port="$cfg_redis"
             fi
         fi
     fi
 
-    if [ "$db_locked" = false ] && [ -z "$resolved_db_port" ] || [ "$redis_locked" = false ] && [ -z "$resolved_redis_port" ]; then
+    if [ "$db_locked" = false ] && [ -z "$resolved_db_port" ] || { [ "$uses_redis" = true ] && [ "$redis_locked" = false ] && [ -z "$resolved_redis_port" ]; }; then
         local ports_from_cfg
         ports_from_cfg=$(read_ports_from_worktree_config "${tree_dir%/}")
         if [ -n "$ports_from_cfg" ]; then
@@ -728,7 +808,7 @@ resolve_tree_requirement_ports() {
             if [ "$db_locked" = false ] && [ -z "$resolved_db_port" ]; then
                 resolved_db_port="$cfg_db"
             fi
-            if [ "$redis_locked" = false ] && [ -z "$resolved_redis_port" ]; then
+            if [ "$uses_redis" = true ] && [ "$redis_locked" = false ] && [ -z "$resolved_redis_port" ]; then
                 resolved_redis_port="$cfg_redis"
             fi
         fi
@@ -748,7 +828,11 @@ resolve_tree_requirement_ports() {
         db_port_base="${SUPABASE_DB_PORT_BASE:-54322}"
     fi
     resolved_db_port=$(normalize_requirement_port_from_cfg "$resolved_db_port" "$db_port_base" "$base_offset")
-    resolved_redis_port=$(normalize_requirement_port_from_cfg "$resolved_redis_port" "$REDIS_PORT_BASE" "$base_offset")
+    if [ "$uses_redis" = true ]; then
+        resolved_redis_port=$(normalize_requirement_port_from_cfg "$resolved_redis_port" "$REDIS_PORT_BASE" "$base_offset")
+    else
+        resolved_redis_port=""
+    fi
 
     local db_default=false
     local redis_default=false
@@ -759,7 +843,7 @@ resolve_tree_requirement_ports() {
         resolved_db_port=$((db_port_base + base_offset))
         db_default=true
     fi
-    if [ -z "$resolved_redis_port" ]; then
+    if [ "$uses_redis" = true ] && [ -z "$resolved_redis_port" ]; then
         resolved_redis_port=$((REDIS_PORT_BASE + base_offset))
         redis_default=true
     fi
@@ -771,7 +855,7 @@ resolve_tree_requirement_ports() {
     if [ "$db_default" = true ] && [ "$backend_port_final" -ne "$backend_port_initial" ]; then
         local diff=$((backend_port_final - backend_port_initial))
         resolved_db_port=$((resolved_db_port + diff))
-        if [ "$redis_default" = true ]; then
+        if [ "$uses_redis" = true ] && [ "$redis_default" = true ]; then
             resolved_redis_port=$((resolved_redis_port + diff))
         fi
         if [ "$n8n_default" = true ]; then
@@ -797,7 +881,7 @@ resolve_tree_requirement_ports() {
         fi
     fi
 
-    if [ "$redis_locked" = false ] && [ -n "$resolved_redis_port" ] && [ -n "$redis_container" ]; then
+    if [ "$uses_redis" = true ] && [ "$redis_locked" = false ] && [ -n "$resolved_redis_port" ] && [ -n "$redis_container" ]; then
         if lock_requirement_port_from_map "$resolved_redis_port" "6379" "$redis_container" "${tree_dir}:redis" >/dev/null 2>&1; then
             redis_locked=true
             if [ "$(type -t debug_log_line)" = "function" ] && [ "$(type -t debug_enabled)" = "function" ] && debug_enabled; then
@@ -818,7 +902,7 @@ resolve_tree_requirement_ports() {
     local requested_db="$resolved_db_port"
     if [ "$db_locked" = false ]; then
         resolved_db_port=$(reserve_requirement_port "$resolved_db_port" "$backend_port_final" "$frontend_port_final" "${tree_dir}:db")
-        if [ "$db_default" = true ] && [ "$redis_default" = true ]; then
+        if [ "$uses_redis" = true ] && [ "$db_default" = true ] && [ "$redis_default" = true ]; then
             local db_diff=$((resolved_db_port - requested_db))
             if [ "$db_diff" -ne 0 ]; then
                 resolved_redis_port=$((resolved_redis_port + db_diff))
@@ -826,7 +910,7 @@ resolve_tree_requirement_ports() {
         fi
     fi
 
-    if [ "$redis_locked" = false ]; then
+    if [ "$uses_redis" = true ] && [ "$redis_locked" = false ]; then
         resolved_redis_port=$(reserve_requirement_port "$resolved_redis_port" "$backend_port_final" "$frontend_port_final" "${tree_dir}:redis")
     fi
 
@@ -869,6 +953,10 @@ tree_requirement_ports_for_dir() {
     if tree_uses_supabase "$tree_dir"; then
         uses_supabase=true
     fi
+    local uses_redis=false
+    if tree_uses_redis "$tree_dir"; then
+        uses_redis=true
+    fi
     local project_name=""
     if [ "$uses_supabase" = true ]; then
         project_name="${SUPABASE_TREE_PROJECTS[$tree_dir]:-}"
@@ -903,15 +991,17 @@ tree_requirement_ports_for_dir() {
     fi
 
     local redis_container=""
-    redis_container=$(requirement_container_name "$REDIS_CONTAINER_NAME" "$tree_dir" 2>/dev/null || true)
-    if [ -n "$redis_container" ]; then
-        local existing_redis_port=""
-        existing_redis_port=$(lock_requirement_port_from_container "$redis_container" "6379" "${tree_dir}:redis")
-        if [ -n "$existing_redis_port" ]; then
-            resolved_redis_port="$existing_redis_port"
-            redis_locked=true
-            if [ "$(type -t debug_log_line)" = "function" ] && [ "$(type -t debug_enabled)" = "function" ] && debug_enabled; then
-                debug_log_line "TRACE" "requirements.port.lock.runtime tree=${tree_dir} service=redis source=container container=${redis_container} port=${existing_redis_port}"
+    if [ "$uses_redis" = true ]; then
+        redis_container=$(requirement_container_name "$REDIS_CONTAINER_NAME" "$tree_dir" 2>/dev/null || true)
+        if [ -n "$redis_container" ]; then
+            local existing_redis_port=""
+            existing_redis_port=$(lock_requirement_port_from_container "$redis_container" "6379" "${tree_dir}:redis")
+            if [ -n "$existing_redis_port" ]; then
+                resolved_redis_port="$existing_redis_port"
+                redis_locked=true
+                if [ "$(type -t debug_log_line)" = "function" ] && [ "$(type -t debug_enabled)" = "function" ] && debug_enabled; then
+                    debug_log_line "TRACE" "requirements.port.lock.runtime tree=${tree_dir} service=redis source=container container=${redis_container} port=${existing_redis_port}"
+                fi
             fi
         fi
     fi
@@ -919,7 +1009,7 @@ tree_requirement_ports_for_dir() {
     if [ "$db_locked" = false ]; then
         resolved_db_port=$(read_env_value "$env_file" "DB_PORT")
     fi
-    if [ "$redis_locked" = false ]; then
+    if [ "$uses_redis" = true ] && [ "$redis_locked" = false ]; then
         resolved_redis_port=$(read_env_value "$env_file" "REDIS_PORT")
     fi
 
@@ -943,13 +1033,13 @@ tree_requirement_ports_for_dir() {
             if [ "$db_locked" = false ] && [ -n "$cfg_db" ]; then
                 resolved_db_port="$cfg_db"
             fi
-            if [ "$redis_locked" = false ] && [ -n "$cfg_redis" ]; then
+            if [ "$uses_redis" = true ] && [ "$redis_locked" = false ] && [ -n "$cfg_redis" ]; then
                 resolved_redis_port="$cfg_redis"
             fi
         fi
     fi
 
-    if [ -z "$resolved_db_port" ] || [ -z "$resolved_redis_port" ]; then
+    if [ -z "$resolved_db_port" ] || { [ "$uses_redis" = true ] && [ -z "$resolved_redis_port" ]; }; then
         local ports_from_cfg
         ports_from_cfg=$(read_ports_from_worktree_config "${tree_dir%/}")
         if [ -n "$ports_from_cfg" ]; then
@@ -961,7 +1051,7 @@ tree_requirement_ports_for_dir() {
             if [ "$db_locked" = false ] && [ -z "$resolved_db_port" ]; then
                 resolved_db_port="$cfg_db"
             fi
-            if [ "$redis_locked" = false ] && [ -z "$resolved_redis_port" ]; then
+            if [ "$uses_redis" = true ] && [ "$redis_locked" = false ] && [ -z "$resolved_redis_port" ]; then
                 resolved_redis_port="$cfg_redis"
             fi
         fi
@@ -972,7 +1062,11 @@ tree_requirement_ports_for_dir() {
         db_port_base="${SUPABASE_DB_PORT_BASE:-54322}"
     fi
     resolved_db_port=$(normalize_requirement_port_from_cfg "$resolved_db_port" "$db_port_base" "$base_offset")
-    resolved_redis_port=$(normalize_requirement_port_from_cfg "$resolved_redis_port" "$REDIS_PORT_BASE" "$base_offset")
+    if [ "$uses_redis" = true ]; then
+        resolved_redis_port=$(normalize_requirement_port_from_cfg "$resolved_redis_port" "$REDIS_PORT_BASE" "$base_offset")
+    else
+        resolved_redis_port=""
+    fi
 
     if [ "$db_locked" = false ] && [ -n "$resolved_db_port" ] && [ -n "$db_container" ]; then
         if [ "$uses_supabase" = true ]; then
@@ -991,7 +1085,7 @@ tree_requirement_ports_for_dir() {
             fi
         fi
     fi
-    if [ "$redis_locked" = false ] && [ -n "$resolved_redis_port" ] && [ -n "$redis_container" ]; then
+    if [ "$uses_redis" = true ] && [ "$redis_locked" = false ] && [ -n "$resolved_redis_port" ] && [ -n "$redis_container" ]; then
         if lock_requirement_port_from_map "$resolved_redis_port" "6379" "$redis_container" "${tree_dir}:redis" >/dev/null 2>&1; then
             redis_locked=true
             if [ "$(type -t debug_log_line)" = "function" ] && [ "$(type -t debug_enabled)" = "function" ] && debug_enabled; then
@@ -1000,9 +1094,11 @@ tree_requirement_ports_for_dir() {
         fi
     fi
 
-    if [ -z "$resolved_db_port" ] || [ -z "$resolved_redis_port" ]; then
+    if [ -z "$resolved_db_port" ] || { [ "$uses_redis" = true ] && [ -z "$resolved_redis_port" ]; }; then
         [ -z "$resolved_db_port" ] && resolved_db_port=$((db_port_base + base_offset))
-        [ -z "$resolved_redis_port" ] && resolved_redis_port=$((REDIS_PORT_BASE + base_offset))
+        if [ "$uses_redis" = true ] && [ -z "$resolved_redis_port" ]; then
+            resolved_redis_port=$((REDIS_PORT_BASE + base_offset))
+        fi
     fi
 
     if tree_uses_n8n "$tree_dir" && [ -z "${N8N_TREE_PORTS[$tree_dir]:-}" ]; then
@@ -1175,6 +1271,10 @@ start_tree_postgres() {
 start_tree_redis() {
     local tree_dir=$1
     local redis_port=$2
+    if ! tree_uses_redis "$tree_dir"; then
+        echo -e "${YELLOW}Skipping Redis for ${tree_dir} (disabled by Redis configuration).${NC}"
+        return 0
+    fi
     local container_name
     container_name=$(requirement_container_name "$REDIS_CONTAINER_NAME" "$tree_dir") || return 1
     local volume_name=""
@@ -1309,14 +1409,26 @@ ensure_tree_requirements() {
     local db_port=$2
     local redis_port=$3
     local n8n_port=${4:-}
+    local uses_redis=false
+    if tree_uses_redis "$tree_dir"; then
+        uses_redis=true
+    fi
 
-    echo -e "${CYAN}Starting requirements for ${tree_dir} (db:${db_port}, redis:${redis_port})...${NC}"
+    local redis_label="$redis_port"
+    if [ "$uses_redis" != true ]; then
+        redis_label="disabled"
+    fi
+    echo -e "${CYAN}Starting requirements for ${tree_dir} (db:${db_port}, redis:${redis_label})...${NC}"
     if tree_uses_supabase "$tree_dir"; then
         register_supabase_tree_config "$tree_dir" "$db_port"
         if ! start_tree_supabase "$tree_dir" "$db_port"; then
             return 1
         fi
-        apply_supabase_env_for_tree "$tree_dir" "$db_port" "$redis_port"
+        if [ "$uses_redis" = true ]; then
+            apply_supabase_env_for_tree "$tree_dir" "$db_port" "$redis_port"
+        else
+            apply_supabase_env_for_tree "$tree_dir" "$db_port" ""
+        fi
         if tree_uses_n8n "$tree_dir"; then
             if [ -z "$n8n_port" ]; then
                 tree_n8n_port_for_dir "$tree_dir" "" n8n_port
@@ -1331,8 +1443,10 @@ ensure_tree_requirements() {
             return 1
         fi
     fi
-    if ! start_tree_redis "$tree_dir" "$redis_port"; then
-        return 1
+    if [ "$uses_redis" = true ]; then
+        if ! start_tree_redis "$tree_dir" "$redis_port"; then
+            return 1
+        fi
     fi
     return 0
 }

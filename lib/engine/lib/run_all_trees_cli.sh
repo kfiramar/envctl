@@ -93,7 +93,7 @@ Options:
   --frontend-log-profile <profile>
   --frontend-log-level <level>
   --frontend-test-runner <runner>  Frontend test runner (bun default; auto, npm, bun)
-  --main-services-local        Run Main with local Supabase/n8n (default, ignore .env.main overrides; alias: --main-local)
+  --main-services-local        Run Main with local Supabase/n8n (ignore .env.main overrides; alias: --main-local)
   --main-services-remote       Run Main with remote services via .env.main (alias: --main-remote)
   --key-debug                  Enable TTY key debug logging
   --help, -h                   Show this help
@@ -1090,9 +1090,6 @@ run_all_trees_cli_parse_args() {
     if [ "$force_main_mode" = true ]; then
         main_mode=true
         auto_resume=false
-    fi
-    if [ "$main_mode" = true ] && [ -z "$main_requirements_mode" ]; then
-        main_requirements_mode="local"
     fi
     if [ -n "$log_profile" ]; then
         if [ -z "$backend_log_profile" ]; then

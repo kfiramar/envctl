@@ -2,9 +2,6 @@
 
 set -euo pipefail
 
-ENVCTL_BLOCK_START="# >>> envctl PATH >>>"
-ENVCTL_BLOCK_END="# <<< envctl PATH <<<"
-ENVCTL_DEFAULT_PATH_LINE='export PATH="$HOME/projects/envctl/bin:$PATH"'
 ENVCTL_ROOT_DIR="${ENVCTL_ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}"
 
 ENVCTL_SELECTED_ENGINE=""
@@ -100,7 +97,7 @@ envctl_resolve_repo_root() {
             return 1
         }
         if ! envctl_is_repo_root "$repo_root"; then
-            envctl_error "Invalid repo root: $repo_root (expected .git/ and either .envctl.sh or utils/run.sh)"
+            envctl_error "Invalid repo root: $repo_root (expected .git/ and one of: .envctl, .envctl.sh, utils/run.sh)"
             return 1
         fi
         printf '%s\n' "$repo_root"
@@ -184,7 +181,7 @@ envctl_install_script() {
         return 1
     fi
 
-    "$installer" "$mode" "$@"
+    ENVCTL_ROOT_DIR="$ENVCTL_ROOT_DIR" "$installer" "$mode" "$@"
 }
 
 envctl_forward_to_engine() {
