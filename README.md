@@ -1,16 +1,16 @@
 # envctl
 
-`envctl` is a global CLI that brings up complete local development environments across your main repo and multiple worktrees in seconds.
+`envctl` is a global CLI for spinning up complete local development environments in seconds across a main repository and many worktrees.
 
-It is designed for modern AI-assisted development: run several implementations in parallel, test them side-by-side, and compare results without hand-wiring scripts per repository.
+It is built for high-throughput engineering and AI-assisted coding: run multiple implementations in parallel, test all of them, inspect differences, and iterate fast with one consistent command surface.
 
 ## Table of Contents
 - [What envctl Solves](#what-envctl-solves)
-- [Why This Matters for AI Coding](#why-this-matters-for-ai-coding)
-- [Core Capabilities](#core-capabilities)
+- [What You Can Do with envctl](#what-you-can-do-with-envctl)
+- [Important Flags](#important-flags)
 - [How envctl Works](#how-envctl-works)
 - [Install Globally](#install-globally)
-- [Repository Detection and Engine Routing](#repository-detection-and-engine-routing)
+- [Repository Detection](#repository-detection)
 - [Quick Start](#quick-start)
 - [Run/Test/Compare Playbooks](#runtestcompare-playbooks)
 - [Command Reference](#command-reference)
@@ -18,54 +18,116 @@ It is designed for modern AI-assisted development: run several implementations i
 - [Configuration Reference (Grouped by Type)](#configuration-reference-grouped-by-type)
 - [Optional Hooks (`.envctl.sh`)](#optional-hooks-envctlsh)
 - [Troubleshooting](#troubleshooting)
-- [Legacy Compatibility](#legacy-compatibility)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## What envctl Solves
-When you are building quickly across many branches or worktrees, local environment setup is usually the bottleneck.
+When teams scale development with many branches, worktrees, and AI agents, environment management becomes the slow part.
 
-Typical pain points:
-- Every repo has different startup assumptions.
-- Running multiple implementations at once causes port and process collisions.
-- Comparing implementations means manually juggling shells and infrastructure.
-- AI agents can generate code fast, but they still need deterministic run/test loops.
+Common bottlenecks:
+- Different startup behavior per repo.
+- Port collisions across parallel implementations.
+- Manual coordination of backend, frontend, DB, Redis, and tool services.
+- Hard-to-reproduce run/test loops across people and agents.
 
-`envctl` solves this by standardizing orchestration into one CLI and one model.
+`envctl` turns this into one deterministic control plane.
 
-## Why This Matters for AI Coding
-AI workflows work best when environment control is deterministic.
+## What You Can Do with envctl
 
-With `envctl`, you can:
-- Spin up many worktrees fast with isolated ports.
-- Run the same tests against multiple implementations.
-- Keep infra policy (PostgreSQL/Redis/Supabase/n8n) consistent across all trees.
-- Use one command vocabulary for humans and agents.
+### 1. Bring up full environments fast
+- Start backend + frontend + infrastructure in one flow.
+- Resume previous sessions without rebuilding orchestration state.
+- Run in interactive mode or batch mode.
 
-This makes parallel agent execution practical instead of fragile.
+### 2. Operate many worktrees at once
+- Start multiple trees in parallel.
+- Keep per-tree isolation with managed ports.
+- Inspect everything from one dashboard/log flow.
 
-## Core Capabilities
-- Global launcher: call `envctl` from any git project.
-- Worktree orchestration: start, resume, inspect, and clean up multi-tree sessions.
-- Full stack startup: backend, frontend, and infrastructure in one flow.
-- Infrastructure toggles by scope:
-  - Global
-  - Main only
-  - All trees
-  - Selected trees via filters
-- Health, logs, doctor diagnostics, and stateful resume.
-- Legacy forwarding for existing `utils/run.sh` projects.
+### 3. Run, test, and compare implementations
+- Target all trees/projects/services or only a specific slice.
+- Run one test command across many implementations.
+- Compare failures and logs quickly.
+
+### 4. Control infra by scope
+- Main-only toggles.
+- Global toggles.
+- All-trees toggles.
+- Tree-filter toggles for selective enablement.
+
+### 5. Use one interface for humans and AI agents
+- Same commands for local dev and agent-driven tasks.
+- Non-interactive command mode for automation.
+- Deterministic behavior via config + explicit flags.
+
+## Important Flags
+These are the highest-value flags for day-to-day use.
+
+### Session and mode
+| Flag | Purpose |
+| --- | --- |
+| `--resume` | Resume previous runtime state and session mapping quickly. |
+| `--batch` | Non-interactive startup/execution. |
+| `--main` | Run only main mode (skip trees). |
+| `trees=true` / `trees=false` | Explicitly switch between tree mode and main mode. |
+| `--doctor` | Run diagnostics and exit. |
+| `--dashboard` | Show runtime dashboard and exit. |
+
+### Targeting and scope
+| Flag | Purpose |
+| --- | --- |
+| `--project <name>` | Target one project (repeatable). |
+| `--projects <a,b>` | Target multiple projects. |
+| `--service <name>` | Target one service. |
+| `--all` | Target all available projects/services. |
+| `--untested` | Target untested projects (tests workflow). |
+
+### Worktree orchestration
+| Flag | Purpose |
+| --- | --- |
+| `--plan [SELECTION]` | Create worktrees from planning selection and run them (parallel). |
+| `--sequential-plan [SELECTION]` | Same as plan, but startup one-by-one. |
+| `--parallel-plan [SELECTION]` | Alias for `--plan`. |
+| `--setup-worktrees <FEATURE> <COUNT>` | Create many worktrees directly. |
+| `--setup-worktree <FEATURE> <ITER>` | Create one specific worktree iteration. |
+| `--include-existing-worktrees <a,b>` | Include existing iterations when using setup flags. |
+
+### Performance and reliability
+| Flag | Purpose |
+| --- | --- |
+| `--fast` | Enable fast startup caches. |
+| `--refresh-cache` | Force full scan and refresh cached startup metadata. |
+| `--parallel-trees` | Enable parallel tree startup workers. |
+| `--parallel-trees-max <n>` | Set max worker count for parallel tree startup. |
+| `--clear-port-state` | Clear saved port state when reservations get stale. |
+| `--force` | Force free configured ports if needed. |
+
+### Logs and debugging
+| Flag | Purpose |
+| --- | --- |
+| `--logs-tail <n>` | Tail last N lines for logs command. |
+| `--logs-follow` | Stream logs continuously. |
+| `--logs-duration <sec>` | Limit follow duration. |
+| `--debug-trace` | Enable trace logging for deep troubleshooting. |
+| `--debug-trace-log <path>` | Write trace output to a custom path. |
+
+### Main environment infra source
+| Flag | Purpose |
+| --- | --- |
+| `--main-services-local` | Force local main infra mode. |
+| `--main-services-remote` | Force remote main service mode via main env files. |
+| `--seed-requirements-from-base` | Seed tree DB/Redis state from base where supported. |
 
 ## How envctl Works
-`envctl` has a launcher layer and an engine layer:
 
 ```mermaid
 flowchart LR
   A["User / AI Agent"] --> B["envctl Launcher"]
   B --> C["Git Repo Resolution"]
-  C --> D["Generic envctl Engine"]
-  C --> E["Legacy Repo Engine (utils/run.sh)"]
-  D --> F["Services (backend/frontend)"]
-  D --> G["Infra (PostgreSQL/Redis/Supabase/n8n)"]
-  D --> H["State, Logs, Health, Doctor"]
+  C --> D["envctl Engine"]
+  D --> E["Services (backend/frontend)"]
+  D --> F["Infrastructure (PostgreSQL/Redis/Supabase/n8n)"]
+  D --> G["State, Logs, Health, Doctor"]
 ```
 
 ## Install Globally
@@ -97,29 +159,24 @@ envctl --help
 envctl doctor --repo /absolute/path/to/repo
 ```
 
-## Repository Detection and Engine Routing
-A path is considered valid when it is a git repository root (`.git` directory or `.git` file).
-
-This means `.envctl.sh` is not required just to run `envctl`.
-
-Routing order:
-1. If `.envctl` or `.envctl.sh` exists: use the generic envctl engine.
-2. Else if `utils/run_engine.sh` or `utils/run.sh` exists: forward to legacy engine.
-3. Else: use the generic envctl engine with defaults.
+## Repository Detection
+`envctl` resolves a valid repository root as a git repo root (`.git` directory or `.git` file).
 
 You can run:
-- From any subdirectory inside a repo (auto root detection)
-- From anywhere with `--repo <path>`
+- From any subdirectory inside a repo (auto root detection).
+- From anywhere with `--repo <path>`.
+
+`.envctl.sh` is optional and only needed for custom hooks.
 
 ## Quick Start
 
-### 1. (Optional) add orchestration config
+### 1. Optional: add orchestration config
 
 ```bash
 cp .envctl.example /path/to/your-project/.envctl
 ```
 
-### 2. Define services (optional but recommended)
+### 2. Define explicit services (optional)
 
 ```bash
 # .envctl
@@ -127,21 +184,16 @@ ENVCTL_SERVICE_1="API Server | backend  | backend  | 8000 |      | logs/api"
 ENVCTL_SERVICE_2="Web App    | frontend | frontend | 3000 | 8000 | logs/web"
 ```
 
-Service format:
+Format:
 
 ```text
 "DisplayName | DirectoryPath | ServiceType | Port | BackendPort | LogDirectory"
 ```
 
-### 3. Start environment
+### 3. Start and operate
 
 ```bash
 envctl --resume
-```
-
-### 4. Operate it
-
-```bash
 envctl dashboard
 envctl logs --all --logs-follow
 envctl test --all
@@ -150,30 +202,23 @@ envctl stop-all
 
 ## Run/Test/Compare Playbooks
 
-### Playbook 1: Parallel implementation run
-Run multiple worktree implementations in one orchestrated session:
+### Playbook 1: parallel implementation loop
 
 ```bash
-envctl plan
+envctl --plan
 envctl dashboard
+envctl logs --all --logs-follow
 ```
 
-Use dashboard + logs to inspect each implementation while they run concurrently.
-
-### Playbook 2: Compare behavior across implementations
-1. Start session for all selected trees.
-2. Run a shared test target.
-3. Compare failing/passing trees from one control plane.
-
-Example:
+### Playbook 2: compare implementations via one test command
 
 ```bash
 envctl test --all
 envctl errors --all
-envctl logs --all
+envctl logs --all --logs-tail 300
 ```
 
-### Playbook 3: Validate one project repeatedly while AI iterates
+### Playbook 3: tight loop on one project while AI iterates
 
 ```bash
 envctl test --project api
@@ -181,7 +226,7 @@ envctl logs --project api --logs-follow
 envctl restart --project api
 ```
 
-### Playbook 4: Multi-repo AI control from one terminal
+### Playbook 4: control multiple repositories from one shell context
 
 ```bash
 envctl --repo ~/projects/service-a --resume
@@ -201,17 +246,14 @@ envctl uninstall [--shell-file <path>] [--dry-run]
 envctl --help
 ```
 
-`envctl doctor` validates launcher routing (binary path, repo root, selected engine).
-
-### Engine command families
-List at runtime:
+### Runtime discovery helpers
 
 ```bash
 envctl --list-commands
 envctl --list-targets
 ```
 
-Common commands:
+### High-value command families
 - `dashboard`
 - `delete-worktree`
 - `stop` / `stop-all`
@@ -224,17 +266,6 @@ Common commands:
 - `pr`
 - `commit`
 
-Common targeting/mode options:
-- `--main`
-- `--resume`
-- `--project`
-- `--service`
-- `--all`
-- `--doctor`
-- `--debug-trace`
-- `--parallel-trees`
-- `--parallel-trees-max`
-
 ## Configuration Model
 
 ### Config files
@@ -243,9 +274,9 @@ Common targeting/mode options:
 
 ### Precedence
 `envctl` applies configuration in this order:
-1. Existing shell environment variables
-2. `.envctl` / `.envctl.sh`
-3. Engine defaults
+1. Existing shell environment variables.
+2. `.envctl` / `.envctl.sh`.
+3. Engine defaults.
 
 ### `.envctl` vs `.env`
 - `.envctl` controls orchestration behavior.
@@ -333,8 +364,6 @@ envctl_define_services() {
 }
 ```
 
-You do not need `.envctl.sh` for normal usage.
-
 ## Troubleshooting
 
 ### "Could not resolve repository root"
@@ -357,10 +386,18 @@ Verify toggles for:
 - `REDIS_*`
 - `N8N_*`
 
-## Legacy Compatibility
-If a repo is still based on `utils/run.sh`, `envctl` can forward commands there.
+## Contributing
+Contributions are welcome.
 
-This enables gradual migration: keep old repos operational while adopting unified `envctl` orchestration for new and upgraded repos.
+Recommended workflow:
+1. Create a branch from `main`.
+2. Keep changes scoped to one objective (launcher, infra, docs, tests, etc.).
+3. Run validation locally:
+```bash
+bats tests/bats/*.bats
+```
+4. Use conventional commits (`type(scope): subject`).
+5. Open a PR with a concise `Summary`, a `Validation` section with exact commands/results, and a short `Impact` note.
 
 ---
 
