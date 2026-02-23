@@ -1,0 +1,53 @@
+# .envctl.example
+#
+# This file represents the EXACT default configuration of the envctl engine.
+# Copy this to '.envctl' at the root of your project to override these defaults.
+
+# ==========================================
+# Infrastructure Dependencies
+# ==========================================
+
+# By default, envctl sets up PostgreSQL and Redis automatically.
+# Set this to true to disable running the default infrastructure entirely.
+# (This skips default DB/Redis in both Main and Trees modes)
+ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE=false
+
+# Core default dependency ports
+DB_PORT=5432
+REDIS_PORT=6379
+
+# Automatically start a full Supabase stack linked to your project?
+SUPABASE_MAIN_ENABLE=false
+
+# Automatically start an n8n webhook/workflow instance?
+N8N_MAIN_ENABLE=false
+N8N_PORT_BASE=5678
+
+# ==========================================
+# Implicit Auto-Discovery
+# ==========================================
+
+# If no explicit services are defined below, envctl will attempt to
+# run the project using these directory names:
+FRONTEND_DIR_NAME="frontend"
+BACKEND_DIR_NAME="backend"
+
+# You can selectively disable implicit discovery for these layers:
+RUN_FRONTEND=true
+RUN_BACKEND=true
+
+# Base ports automatically assigned to auto-discovered directories
+BACKEND_PORT_BASE=8000
+FRONTEND_PORT_BASE=9000
+
+# ==========================================
+# Explicit Project Services
+# ==========================================
+
+# If you define ENVCTL_SERVICE_1, it completely overrides the auto-discovery
+# mechanisms above and will strictly orchestrate the array defined here instead.
+#
+# Format: "DisplayName | DirectoryPath | ServiceType | Port | BackendPort | LogDirectory"
+#
+# ENVCTL_SERVICE_1="API Server | backend  | backend  | 8000 |      | logs/api"
+# ENVCTL_SERVICE_2="Web App    | frontend | frontend | 3000 | 8000 | logs/web"
