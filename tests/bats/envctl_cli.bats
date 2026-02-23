@@ -46,6 +46,29 @@ SCRIPT
   [[ "$output" == *"reachable"* ]]
 }
 
+@test "envctl doctor works for git repo without .envctl or legacy scripts" {
+  run bash -lc '
+    tmp=$(mktemp -d)
+    mkdir -p "$tmp/repo/.git"
+    "$0" --repo "$tmp/repo" doctor
+  ' "$BIN"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Repo Root:"* ]]
+  [[ "$output" == *"Engine Path:"* ]]
+  [[ "$output" == *"lib/engine/main.sh"* ]]
+}
+
+@test "envctl accepts git worktree-style .git file" {
+  run bash -lc '
+    tmp=$(mktemp -d)
+    mkdir -p "$tmp/repo"
+    : > "$tmp/repo/.git"
+    "$0" --repo "$tmp/repo" doctor
+  ' "$BIN"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Repo Root:"* ]]
+}
+
 @test "envctl prefers run_engine.sh over run.sh when both exist" {
   run bash -lc '
     tmp=$(mktemp -d)

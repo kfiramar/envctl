@@ -63,11 +63,7 @@ envctl_file_realpath() {
 envctl_is_repo_root() {
     local dir=${1:-}
     [ -n "$dir" ] || return 1
-    [ -d "$dir/.git" ] || return 1
-    if [ -f "$dir/.envctl" ] || [ -f "$dir/.envctl.sh" ]; then
-        return 0
-    fi
-    if [ -f "$dir/utils/run.sh" ]; then
+    if [ -d "$dir/.git" ] || [ -f "$dir/.git" ]; then
         return 0
     fi
     return 1
@@ -97,7 +93,7 @@ envctl_resolve_repo_root() {
             return 1
         }
         if ! envctl_is_repo_root "$repo_root"; then
-            envctl_error "Invalid repo root: $repo_root (expected .git/ and one of: .envctl, .envctl.sh, utils/run.sh)"
+            envctl_error "Invalid repo root: $repo_root (expected a git repository with .git)"
             return 1
         fi
         printf '%s\n' "$repo_root"
@@ -145,8 +141,11 @@ envctl_select_engine() {
         return 0
     fi
 
+    if ENVCTL_SELECTED_ENGINE="$(envctl_resolve_engine_path "$repo_root")"; then
+        return 0
+    fi
 
-    ENVCTL_SELECTED_ENGINE="$(envctl_resolve_engine_path "$repo_root")" || return 1
+    ENVCTL_SELECTED_ENGINE="${ENVCTL_ROOT_DIR%/}/lib/engine/main.sh"
     return 0
 }
 

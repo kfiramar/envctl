@@ -1,104 +1,81 @@
 # envctl
 
-`envctl` is a unified local-environment control plane for modern software teams.
-It turns ad-hoc "run this script here, then that script there" into a consistent, reproducible CLI that works across repositories, worktrees, and AI-assisted coding sessions.
+`envctl` is a global CLI that brings up complete local development environments across your main repo and multiple worktrees in seconds.
 
-When you are programming with AI agents, the bottleneck is usually environment management, not code generation. `envctl` is built to remove that bottleneck.
+It is designed for modern AI-assisted development: run several implementations in parallel, test them side-by-side, and compare results without hand-wiring scripts per repository.
 
 ## Table of Contents
-- [Why envctl](#why-envctl)
-- [What You Get](#what-you-get)
-- [AI-First Workflow Benefits](#ai-first-workflow-benefits)
-- [How It Works](#how-it-works)
-- [Installation](#installation)
-- [Repository Detection and Routing](#repository-detection-and-routing)
+- [What envctl Solves](#what-envctl-solves)
+- [Why This Matters for AI Coding](#why-this-matters-for-ai-coding)
+- [Core Capabilities](#core-capabilities)
+- [How envctl Works](#how-envctl-works)
+- [Install Globally](#install-globally)
+- [Repository Detection and Engine Routing](#repository-detection-and-engine-routing)
 - [Quick Start](#quick-start)
+- [Run/Test/Compare Playbooks](#runtestcompare-playbooks)
 - [Command Reference](#command-reference)
 - [Configuration Model](#configuration-model)
-- [Configuration Reference](#configuration-reference)
-- [Programmable Hooks (`.envctl.sh`)](#programmable-hooks-envctlsh)
-- [AI and Multi-Repository Playbooks](#ai-and-multi-repository-playbooks)
-- [Runtime State, Logs, and Recovery](#runtime-state-logs-and-recovery)
+- [Configuration Reference (Grouped by Type)](#configuration-reference-grouped-by-type)
+- [Optional Hooks (`.envctl.sh`)](#optional-hooks-envctlsh)
 - [Troubleshooting](#troubleshooting)
 - [Legacy Compatibility](#legacy-compatibility)
 
-## Why envctl
-Local development at scale breaks down for predictable reasons:
-- Every project has a different startup script and assumptions.
-- Running several repositories in parallel causes port collisions and process drift.
-- Worktrees multiply coordination overhead.
-- AI agents can edit code quickly but still need deterministic environments to validate changes.
+## What envctl Solves
+When you are building quickly across many branches or worktrees, local environment setup is usually the bottleneck.
 
-`envctl` solves this by standardizing environment orchestration while preserving project-level flexibility.
+Typical pain points:
+- Every repo has different startup assumptions.
+- Running multiple implementations at once causes port and process collisions.
+- Comparing implementations means manually juggling shells and infrastructure.
+- AI agents can generate code fast, but they still need deterministic run/test loops.
 
-## What You Get
-- One launcher command (`envctl`) from anywhere.
-- Automatic repository root detection.
-- Declarative project config (`.envctl`) and programmable hooks (`.envctl.sh`).
-- Intelligent process orchestration for backend/frontend services.
-- Built-in infra controls (PostgreSQL, Redis, Supabase, n8n).
-- Parallel worktree startup and targeted project/service commands.
-- Runtime dashboards, health checks, logs, and recovery flows.
-- Backward compatibility with legacy `utils/run.sh` repositories.
+`envctl` solves this by standardizing orchestration into one CLI and one model.
 
-## AI-First Workflow Benefits
-`envctl` is particularly strong when coding with AI agents (Codex, Claude, Cursor, etc.) because it gives agents a stable execution model.
+## Why This Matters for AI Coding
+AI workflows work best when environment control is deterministic.
 
-### 1. Deterministic environment handoff
-You can ask an agent to run tests, restart services, or inspect logs without explaining custom scripts each time.
+With `envctl`, you can:
+- Spin up many worktrees fast with isolated ports.
+- Run the same tests against multiple implementations.
+- Keep infra policy (PostgreSQL/Redis/Supabase/n8n) consistent across all trees.
+- Use one command vocabulary for humans and agents.
 
-### 2. Multi-repository operation
-Use `--repo` to control different projects from one terminal context:
+This makes parallel agent execution practical instead of fragile.
 
-```bash
-envctl --repo ~/projects/service-a --resume
-envctl --repo ~/projects/service-b --resume
-envctl --repo ~/projects/service-c test --all
-```
+## Core Capabilities
+- Global launcher: call `envctl` from any git project.
+- Worktree orchestration: start, resume, inspect, and clean up multi-tree sessions.
+- Full stack startup: backend, frontend, and infrastructure in one flow.
+- Infrastructure toggles by scope:
+  - Global
+  - Main only
+  - All trees
+  - Selected trees via filters
+- Health, logs, doctor diagnostics, and stateful resume.
+- Legacy forwarding for existing `utils/run.sh` projects.
 
-### 3. Worktree-native iteration
-For parallel feature work, `envctl` can plan/start worktrees and keep per-worktree ports aligned.
-
-### 4. Faster debug loops
-Unified commands for logs, tests, restart, and diagnostics reduce instruction overhead between you and AI.
-
-## How It Works
-`envctl` has three layers:
-
-1. Launcher layer (`bin/envctl`, `lib/envctl.sh`)
-- Resolves project root (`.git` + `.envctl`/`.envctl.sh` or legacy `utils/run.sh`).
-- Routes commands to either the generic engine or a legacy repository engine.
-
-2. Engine layer (`lib/engine/main.sh`)
-- Parses orchestration commands/options.
-- Manages processes, ports, runtime state, dashboards, and infra.
-
-3. Project config layer
-- `.envctl`: declarative key/value orchestration config.
-- `.envctl.sh`: optional programmable hooks for custom service/infra logic.
+## How envctl Works
+`envctl` has a launcher layer and an engine layer:
 
 ```mermaid
 flowchart LR
   A["User / AI Agent"] --> B["envctl Launcher"]
-  B --> C["Repo Resolution (.git + .envctl/.envctl.sh or utils/run.sh)"]
-  C --> D["Generic Engine (lib/engine/main.sh)"]
-  C --> E["Legacy Engine (utils/run.sh)"]
+  B --> C["Git Repo Resolution"]
+  C --> D["Generic envctl Engine"]
+  C --> E["Legacy Repo Engine (utils/run.sh)"]
   D --> F["Services (backend/frontend)"]
-  D --> G["Infrastructure (PostgreSQL/Redis/Supabase/n8n)"]
-  D --> H["State + Logs + Dashboard"]
+  D --> G["Infra (PostgreSQL/Redis/Supabase/n8n)"]
+  D --> H["State, Logs, Health, Doctor"]
 ```
 
-## Installation
-
-### Install the CLI on your PATH
+## Install Globally
 From this repository:
 
 ```bash
 ./bin/envctl install
 ```
 
-`install` writes an idempotent PATH block to your shell startup file.
-Use explicit target file if needed:
+Useful variants:
 
 ```bash
 envctl install --shell-file ~/.zshrc
@@ -106,45 +83,43 @@ envctl install --shell-file ~/.bashrc
 envctl install --dry-run
 ```
 
-### Uninstall
+Uninstall:
 
 ```bash
 envctl uninstall
 envctl uninstall --shell-file ~/.zshrc
 ```
 
-### Verify
+Verify:
 
 ```bash
 envctl --help
 envctl doctor --repo /absolute/path/to/repo
 ```
 
-## Repository Detection and Routing
-`envctl` considers a path a valid repo root when:
-- `.git/` exists
-- and one of the following exists:
-  - `.envctl`
-  - `.envctl.sh`
-  - `utils/run.sh` (legacy mode)
+## Repository Detection and Engine Routing
+A path is considered valid when it is a git repository root (`.git` directory or `.git` file).
 
-Behavior:
-- If `.envctl` or `.envctl.sh` exists: use the generic envctl engine.
-- Otherwise, if `utils/run.sh` or `utils/run_engine.sh` exists: forward to legacy engine.
+This means `.envctl.sh` is not required just to run `envctl`.
 
-You can run from:
-- Any subdirectory inside a detected repo (auto-detected root)
-- Any location with explicit `--repo <path>`
+Routing order:
+1. If `.envctl` or `.envctl.sh` exists: use the generic envctl engine.
+2. Else if `utils/run_engine.sh` or `utils/run.sh` exists: forward to legacy engine.
+3. Else: use the generic envctl engine with defaults.
+
+You can run:
+- From any subdirectory inside a repo (auto root detection)
+- From anywhere with `--repo <path>`
 
 ## Quick Start
 
-### 1. Create project config
+### 1. (Optional) add orchestration config
 
 ```bash
 cp .envctl.example /path/to/your-project/.envctl
 ```
 
-### 2. Define services (declarative mode)
+### 2. Define services (optional but recommended)
 
 ```bash
 # .envctl
@@ -158,29 +133,65 @@ Service format:
 "DisplayName | DirectoryPath | ServiceType | Port | BackendPort | LogDirectory"
 ```
 
-Supported `ServiceType` values:
-- `backend`
-- `frontend`
-
-### 3. Start your environment
-
-```bash
-envctl
-```
-
-### 4. Common follow-up actions
+### 3. Start environment
 
 ```bash
 envctl --resume
+```
+
+### 4. Operate it
+
+```bash
+envctl dashboard
 envctl logs --all --logs-follow
-envctl tests --all
+envctl test --all
 envctl stop-all
+```
+
+## Run/Test/Compare Playbooks
+
+### Playbook 1: Parallel implementation run
+Run multiple worktree implementations in one orchestrated session:
+
+```bash
+envctl plan
+envctl dashboard
+```
+
+Use dashboard + logs to inspect each implementation while they run concurrently.
+
+### Playbook 2: Compare behavior across implementations
+1. Start session for all selected trees.
+2. Run a shared test target.
+3. Compare failing/passing trees from one control plane.
+
+Example:
+
+```bash
+envctl test --all
+envctl errors --all
+envctl logs --all
+```
+
+### Playbook 3: Validate one project repeatedly while AI iterates
+
+```bash
+envctl test --project api
+envctl logs --project api --logs-follow
+envctl restart --project api
+```
+
+### Playbook 4: Multi-repo AI control from one terminal
+
+```bash
+envctl --repo ~/projects/service-a --resume
+envctl --repo ~/projects/service-b --resume
+envctl --repo ~/projects/service-c --resume
 ```
 
 ## Command Reference
 
-### Launcher-level commands
-These are handled directly by `envctl`:
+### Launcher commands
 
 ```text
 envctl [--repo <path>] [engine args...]
@@ -190,117 +201,119 @@ envctl uninstall [--shell-file <path>] [--dry-run]
 envctl --help
 ```
 
-### Doctor note
-- `envctl doctor` checks launcher resolution (binary path, repo root, engine path).
-- `envctl --doctor` is forwarded to the engine and runs runtime diagnostics.
+`envctl doctor` validates launcher routing (binary path, repo root, selected engine).
 
-### Engine command families (forwarded)
-The engine supports a broad command set. Use this for live discovery:
+### Engine command families
+List at runtime:
 
 ```bash
 envctl --list-commands
 envctl --list-targets
 ```
 
-High-value commands:
-- `plan`, `parallel-plan`, `sequential-plan`
+Common commands:
 - `dashboard`
 - `delete-worktree`
-- `stop`, `stop-all`, `blast-all`
+- `stop` / `stop-all`
 - `restart`
-- `test` / `tests`
+- `test`
 - `logs`
-- `pr` / `prs`
-- `commit`
+- `health`
 - `errors`
+- `doctor`
+- `pr`
+- `commit`
 
-High-value options:
-- Topology and mode: `--main`, `trees=true|false`, `--resume`, `--batch`
-- Targeting: `--project`, `--projects`, `--service`, `--all`
-- Performance: `--fast`, `--refresh-cache`, `--parallel-trees`, `--parallel-trees-max`
-- Diagnostics: `--doctor`, `--debug-trace`, `--clear-port-state`
-- Main service mode: `--main-services-local`, `--main-services-remote`
+Common targeting/mode options:
+- `--main`
+- `--resume`
+- `--project`
+- `--service`
+- `--all`
+- `--doctor`
+- `--debug-trace`
+- `--parallel-trees`
+- `--parallel-trees-max`
 
 ## Configuration Model
 
-### Config file types
-- `.envctl` (recommended): declarative key/value orchestration file.
-- `.envctl.sh`: shell script with hook functions for custom orchestration.
+### Config files
+- `.envctl` (recommended): declarative orchestration config.
+- `.envctl.sh` (optional): shell hooks for advanced custom orchestration.
 
 ### Precedence
-Configuration follows:
-1. Environment variables already set in shell
+`envctl` applies configuration in this order:
+1. Existing shell environment variables
 2. `.envctl` / `.envctl.sh`
 3. Engine defaults
 
-This means CI shells and AI sessions can override behavior without editing repo config.
-
-### `.env` vs `.envctl`
+### `.envctl` vs `.env`
 - `.envctl` controls orchestration behavior.
-- `.env` files control application runtime variables.
+- `.env` controls application runtime env vars/secrets.
 
-Keep orchestration and app secrets/config separate for predictability.
+Keep them separate for predictable startup and safer secret handling.
 
-## Configuration Reference
-This section mirrors the current grouped model and defaults.
+## Configuration Reference (Grouped by Type)
 
 ### Core
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE` | `false` | Global off-switch for built-in PostgreSQL/Redis startup. |
-| `ENVCTL_CONFIG_FILE` | unset | Optional explicit path to config file. |
+| `ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE` | `false` | Global skip for built-in PostgreSQL and Redis startup. |
+| `ENVCTL_CONFIG_FILE` | unset | Explicit path to config file. |
 
-### Database (PostgreSQL / Supabase)
+### Database (PostgreSQL and Supabase)
+Supabase includes PostgreSQL, so treat them as alternative stacks per scope.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `POSTGRES_MAIN_ENABLE` | `true` | Enable shared Main-mode PostgreSQL. |
+| `POSTGRES_MAIN_ENABLE` | `true` | Enable PostgreSQL for Main mode. |
 | `DB_PORT` | `5432` | PostgreSQL base port. |
-| `DB_USER` | `postgres` | PostgreSQL user for default/local workflows. |
-| `DB_PASSWORD` | `postgres` | PostgreSQL password for default/local workflows. |
-| `DB_NAME` | `postgres` | PostgreSQL database name for default/local workflows. |
-| `SUPABASE_MAIN_ENABLE` | `false` | Enable Supabase for Main mode. |
-| `SUPABASE_ALL_TREES` | `false` | Enable Supabase for all tree workspaces. |
-| `SUPABASE_TREE_FILTER` | empty | Comma-separated feature names to enable Supabase for selected trees. |
+| `DB_USER` | `postgres` | PostgreSQL user. |
+| `DB_PASSWORD` | `postgres` | PostgreSQL password. |
+| `DB_NAME` | `postgres` | PostgreSQL DB name. |
+| `SUPABASE_MAIN_ENABLE` | `false` | Enable Supabase stack for Main mode. |
+| `SUPABASE_ALL_TREES` | `false` | Enable Supabase stack for all trees. |
+| `SUPABASE_TREE_FILTER` | empty | Comma-separated features that should use Supabase. |
 
 ### Redis
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `REDIS_ENABLE` | `true` | Global Redis switch for Main + Trees. |
-| `REDIS_MAIN_ENABLE` | `true` | Enable Redis for Main mode. |
-| `REDIS_ALL_TREES` | `true` | Enable Redis for all trees. |
-| `REDIS_TREE_FILTER` | empty | Comma-separated feature names to enable Redis for selected trees. |
+| `REDIS_ENABLE` | `true` | Global Redis switch (Main + Trees). |
+| `REDIS_MAIN_ENABLE` | `true` | Redis switch for Main mode. |
+| `REDIS_ALL_TREES` | `true` | Enable Redis in all tree workspaces. |
+| `REDIS_TREE_FILTER` | empty | Comma-separated features that should use Redis. |
 | `REDIS_PORT` | `6379` | Redis base port. |
 
 ### n8n
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `N8N_ENABLE` | `true` | Global n8n switch for Main + Trees. |
+| `N8N_ENABLE` | `true` | Global n8n switch (Main + Trees). |
 | `N8N_MAIN_ENABLE` | `false` | Enable n8n for Main mode. |
 | `N8N_ALL_TREES` | `false` | Enable n8n for all trees. |
-| `N8N_TREE_FILTER` | empty | Comma-separated feature names to enable n8n for selected trees. |
+| `N8N_TREE_FILTER` | empty | Comma-separated features that should use n8n. |
 | `N8N_PORT_BASE` | `5678` | n8n base port. |
 
-### Backend Auto-Discovery
+### Backend
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `BACKEND_DIR_NAME` | `backend` | Preferred backend directory name. |
 | `RUN_BACKEND` | `true` | Enable backend auto-discovery. |
-| `BACKEND_PORT_BASE` | `8000` | Backend base port. |
+| `BACKEND_DIR_NAME` | `backend` | Preferred backend directory name. |
+| `BACKEND_PORT_BASE` | `8000` | Backend base port for allocation. |
 
-### Frontend Auto-Discovery
+### Frontend
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `FRONTEND_DIR_NAME` | `frontend` | Preferred frontend directory name. |
 | `RUN_FRONTEND` | `true` | Enable frontend auto-discovery. |
-| `FRONTEND_PORT_BASE` | `9000` | Frontend base port. |
+| `FRONTEND_DIR_NAME` | `frontend` | Preferred frontend directory name. |
+| `FRONTEND_PORT_BASE` | `9000` | Frontend base port for allocation. |
 
-### Explicit Service Declarations
+### Explicit Services
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ENVCTL_SERVICE_<N>` | empty | Explicit service list; disables backend/frontend auto-discovery when set. |
+| `ENVCTL_SERVICE_<N>` | empty | Declared service list. If present, auto-discovery is disabled. |
 
-## Programmable Hooks (`.envctl.sh`)
-If declarative config is not enough, define hook functions.
+## Optional Hooks (`.envctl.sh`)
+Use this only when declarative config is not enough.
 
 Available hooks:
 - `envctl_define_services`
@@ -312,7 +325,6 @@ Example:
 # .envctl.sh
 envctl_setup_infrastructure() {
   echo "Custom infra bootstrap"
-  # Start emulator, run local compose, etc.
 }
 
 envctl_define_services() {
@@ -321,88 +333,35 @@ envctl_define_services() {
 }
 ```
 
-Use hooks when you need custom topology, nonstandard service runners, or nontrivial bootstrapping.
-
-## AI and Multi-Repository Playbooks
-
-### Playbook 1: Run multiple repos in parallel
-Use one terminal tab per repo:
-
-```bash
-# Tab 1
-envctl --repo ~/projects/payments --resume
-
-# Tab 2
-envctl --repo ~/projects/checkout --resume
-
-# Tab 3
-envctl --repo ~/projects/notifications --resume
-```
-
-### Playbook 2: Worktree swarm for parallel AI tasks
-```bash
-envctl plan
-envctl dashboard
-```
-Then ask different agents to own different worktrees/projects.
-
-### Playbook 3: Targeted quality loop
-```bash
-envctl tests --project checkout-service
-envctl logs --project checkout-service --logs-follow
-envctl restart --project checkout-service
-```
-
-### Playbook 4: Infra mode switching for Main
-```bash
-# Force local services (ignore remote .env.main)
-envctl --main --main-services-local
-
-# Force remote services (use .env.main style workflow)
-envctl --main --main-services-remote
-```
-
-## Runtime State, Logs, and Recovery
-- Runtime root defaults to `/tmp/envctl-runtime`.
-- Session logs are stored under `${RUN_SH_RUNTIME_DIR}/runs/run_<timestamp>/`.
-- State files are stored under `${RUN_SH_RUNTIME_DIR}/states/`.
-- Use `--resume` to restore a recent session quickly.
-- Use `--clear-port-state` when stale port reservations interfere with startup.
-
-Operationally useful commands:
-
-```bash
-envctl dashboard
-envctl --doctor
-envctl --clear-port-state
-envctl stop-all
-```
+You do not need `.envctl.sh` for normal usage.
 
 ## Troubleshooting
 
 ### "Could not resolve repository root"
-- Ensure you are in a repo containing `.git`.
-- Ensure one of `.envctl`, `.envctl.sh`, or `utils/run.sh` exists at root.
+- Ensure the path is a git repository root (`.git` dir or file).
 - Or pass `--repo /absolute/path`.
 
-### "Port already in use"
-- Use `envctl --doctor` to inspect conflicts.
-- Use `--force` only when intentional.
-- Consider adjusting base ports in `.envctl`.
+### Port collisions or stale state
+- Run `envctl --doctor`.
+- Use `envctl --clear-port-state` when needed.
+- Adjust base ports in `.envctl`.
 
-### Startup succeeded but wrong services are running
-- If `ENVCTL_SERVICE_<N>` is set, auto-discovery is disabled.
-- Remove explicit entries or fix the service declarations.
+### Unexpected services started
+- If `ENVCTL_SERVICE_<N>` exists, auto-discovery is disabled.
+- Remove/fix explicit service entries.
 
-### Infra not starting
-- Check toggles: `ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE`, `POSTGRES_MAIN_ENABLE`, `REDIS_ENABLE`, `REDIS_MAIN_ENABLE`, `SUPABASE_*`, `N8N_*`.
+### Infra not starting as expected
+Verify toggles for:
+- `ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE`
+- PostgreSQL/Supabase toggles
+- `REDIS_*`
+- `N8N_*`
 
 ## Legacy Compatibility
-`envctl` preserves compatibility with older Supportopia-style repositories.
-If a repo has `utils/run.sh` and no `.envctl` / `.envctl.sh`, `envctl` forwards to that legacy engine.
+If a repo is still based on `utils/run.sh`, `envctl` can forward commands there.
 
-This lets teams adopt `envctl` incrementally without breaking existing projects.
+This enables gradual migration: keep old repos operational while adopting unified `envctl` orchestration for new and upgraded repos.
 
 ---
 
-`envctl` is designed to make local orchestration boring, reliable, and scriptable so you and your AI tools can focus on shipping code.
+`envctl` is a development control plane for high-speed iteration: bring up full environments quickly, run many worktrees in parallel, and compare implementations with one consistent CLI.
