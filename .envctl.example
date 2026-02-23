@@ -11,6 +11,14 @@
 # When true, PostgreSQL + Redis startup is skipped.
 ENVCTL_SKIP_DEFAULT_INFRASTRUCTURE=false
 
+# Default startup mode when no mode flag is passed.
+# Allowed: main | trees
+ENVCTL_DEFAULT_MODE="main"
+
+# Planning root directory for --plan / --sequential-plan / --planning-prs.
+# Can be repo-relative (recommended) or absolute.
+ENVCTL_PLANNING_DIR="docs/planning"
+
 # ==========================================
 # Database (PostgreSQL / Supabase)
 # ==========================================

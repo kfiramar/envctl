@@ -4,7 +4,7 @@
 # This script runs frontend and backend servers with proper error handling
 #
 # Usage:
-#   ./run.sh                    # Run trees in interactive mode (default)
+#   ./run.sh                    # Run main project only (default; configurable via ENVCTL_DEFAULT_MODE)
 #   ./run.sh main=true          # Run main project only
 #   ./run.sh --main             # Run main project only (explicit)
 #   ./run.sh trees=false        # Run main project only
@@ -21,14 +21,14 @@
 #   ./run.sh --stop-docker-on-exit       # Stop Docker if this script started it
 #   ./run.sh --setup-worktrees <FEATURE> <COUNT>  # Create worktrees then run them
 #   ./run.sh --setup-worktree <FEATURE> <ITER>    # Create one worktree then run it
-#   ./run.sh --plan [SELECTION]          # Create worktrees from docs/planning selection and run (parallel by default)
+#   ./run.sh --plan [SELECTION]          # Create worktrees from planning selection and run (parallel by default)
 #   ./run.sh --sequential-plan [SELECTION] # Plan mode + one-by-one startup
 #   ./run.sh --parallel-plan [SELECTION] # Alias for --plan
 #   ./run.sh dashboard         # Show runtime dashboard (services + health + resume hints)
 #   ./run.sh dashboard --interactive # Show dashboard then enter interactive command loop
 #   ./run.sh delete-worktree         # Interactive worktree cleanup (delete one/all)
 #   ./run.sh delete-worktree --all   # Delete all worktrees with confirmation
-#   ./run.sh --planning-prs [SELECTION]  # Create PRs from docs/planning selection (no run)
+#   ./run.sh --planning-prs [SELECTION]  # Create PRs from planning selection (no run)
 #   ./run.sh --seed-requirements-from-base   # Seed per-tree DB/Redis from base if available
 #   ./run.sh --frontend-test-runner bun  # Use bun for frontend tests
 #   ./run.sh --fast                     # Enable fast startup caches
@@ -425,6 +425,7 @@ MAIN_FRONTEND_ENV_FILE_PATH=""
 BACKEND_ENV_FILE_OVERRIDE=""
 FRONTEND_ENV_FILE_OVERRIDE=""
 SKIP_LOCAL_DB_ENV=false
+ENVCTL_PLANNING_DIR="${ENVCTL_PLANNING_DIR:-docs/planning}"
 
 # State file for preserving session info
 GRACEFUL_SHUTDOWN_TIMEOUT=10
