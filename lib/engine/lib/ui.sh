@@ -276,8 +276,11 @@ tty_raw_on() {
     if [ -r "$tty" ]; then
         tty_prepare_prompt
         local state
-        state=$(stty -g < "$tty")
-        stty -icanon -echo -isig -ixon min 1 time 0 < "$tty"
+        state=$(stty -g < "$tty" 2>/dev/null || true)
+        if [ -z "$state" ]; then
+            return 1
+        fi
+        stty -icanon -echo -isig -ixon min 1 time 0 < "$tty" 2>/dev/null || return 1
         if [ -n "${KEY_DEBUG_LOG:-}" ]; then
             printf '%s tty_raw_on %s\n' "$(date +%s)" "$state" >> "$KEY_DEBUG_LOG"
         fi
@@ -292,7 +295,7 @@ tty_raw_off() {
     local state=$1
     local tty="${TTY_DEVICE:-/dev/tty}"
     if [ -n "$state" ] && [ -r "$tty" ]; then
-        stty "$state" < "$tty"
+        stty "$state" < "$tty" 2>/dev/null || true
         if [ -n "${KEY_DEBUG_LOG:-}" ]; then
             printf '%s tty_raw_off %s\n' "$(date +%s)" "$state" >> "$KEY_DEBUG_LOG"
         fi

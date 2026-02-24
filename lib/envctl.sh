@@ -18,7 +18,7 @@ trim() {
 envctl_print_usage() {
     cat <<'USAGE'
 Usage:
-  envctl [--repo <path>] [run.sh args...]
+  envctl [--repo <path>] [engine args...]
   envctl doctor [--repo <path>]
   envctl install [--shell-file <path>] [--dry-run]
   envctl uninstall [--shell-file <path>] [--dry-run]
@@ -109,43 +109,16 @@ envctl_resolve_repo_root() {
     return 1
 }
 
-envctl_resolve_engine_path() {
-    local repo_root=${1:-}
-    [ -n "$repo_root" ] || return 1
-
-    local engine="$repo_root/utils/run_engine.sh"
-    if [ -x "$engine" ]; then
-        printf '%s\n' "$engine"
-        return 0
-    fi
-
-    engine="$repo_root/utils/run.sh"
-    if [ -x "$engine" ]; then
-        printf '%s\n' "$engine"
-        return 0
-    fi
-
-    return 1
-}
-
 envctl_select_engine() {
-    local repo_root=${1:-}
-    local mode=${2:-run}
-
     ENVCTL_SELECTED_ENGINE=""
     ENVCTL_SELECTED_ADAPTER=""
     ENVCTL_SELECTED_WORKSPACE=""
 
-    if [ -f "$repo_root/.envctl" ] || [ -f "$repo_root/.envctl.sh" ]; then
-        ENVCTL_SELECTED_ENGINE="${ENVCTL_ROOT_DIR%/}/lib/engine/main.sh"
-        return 0
-    fi
-
-    if ENVCTL_SELECTED_ENGINE="$(envctl_resolve_engine_path "$repo_root")"; then
-        return 0
-    fi
-
     ENVCTL_SELECTED_ENGINE="${ENVCTL_ROOT_DIR%/}/lib/engine/main.sh"
+    if [ ! -x "$ENVCTL_SELECTED_ENGINE" ]; then
+        envctl_error "Missing engine: $ENVCTL_SELECTED_ENGINE"
+        return 1
+    fi
     return 0
 }
 
