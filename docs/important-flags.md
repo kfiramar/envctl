@@ -8,7 +8,7 @@ These are the highest-value flags for daily use.
 | `--resume` | Resume previous runtime state and session mapping quickly. |
 | `--batch` | Non-interactive startup and execution. |
 | `--main` | Run main mode only (skip trees). |
-| `trees=true` / `trees=false` | Explicit tree mode switch. |
+| `--tree` / `--trees` / `trees=true` / `trees=false` | Explicit tree mode switch. |
 | `--doctor` | Run diagnostics and exit. |
 | `--dashboard` | Show runtime dashboard and exit. |
 

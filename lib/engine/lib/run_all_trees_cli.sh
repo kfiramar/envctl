@@ -26,7 +26,7 @@ Commands:
   errors                       Show explicit error diagnostics (implies --skip-startup)
 
 Options:
-  trees=true                   Run all trees
+  trees=true, --tree, --trees Run all trees
   trees=false                  Run main project only
   main=true, --main            Run main project only
   ENVCTL_DEFAULT_MODE=main|trees  Default startup mode when no mode flag is passed (default: main)
@@ -134,7 +134,7 @@ run_all_trees_cli_init_config() {
     RUN_SH_FAST_STARTUP="${RUN_SH_FAST_STARTUP:-false}"
     RUN_SH_REFRESH_CACHE="${RUN_SH_REFRESH_CACHE:-false}"
     RUN_SH_CLEAR_PORTS="${RUN_SH_CLEAR_PORTS:-false}"
-    RUN_SH_OPT_PARALLEL_TREES="${RUN_SH_OPT_PARALLEL_TREES:-false}"
+    RUN_SH_OPT_PARALLEL_TREES="${RUN_SH_OPT_PARALLEL_TREES:-true}"
     RUN_SH_OPT_PARALLEL_TREES_EXPLICIT="${RUN_SH_OPT_PARALLEL_TREES_EXPLICIT:-false}"
     RUN_SH_OPT_PARALLEL_TREES_MAX="${RUN_SH_OPT_PARALLEL_TREES_MAX:-4}"
     RUN_SH_DEBUG="${RUN_SH_DEBUG:-false}"
@@ -205,7 +205,7 @@ run_all_trees_cli_parse_args() {
     local run_sh_fast_startup="${RUN_SH_FAST_STARTUP:-false}"
     local run_sh_refresh_cache="${RUN_SH_REFRESH_CACHE:-false}"
     local run_sh_clear_ports="${RUN_SH_CLEAR_PORTS:-false}"
-    local run_sh_opt_parallel_trees="${RUN_SH_OPT_PARALLEL_TREES:-false}"
+    local run_sh_opt_parallel_trees="${RUN_SH_OPT_PARALLEL_TREES:-true}"
     local run_sh_opt_parallel_trees_explicit="${RUN_SH_OPT_PARALLEL_TREES_EXPLICIT:-false}"
     local run_sh_opt_parallel_trees_max="${RUN_SH_OPT_PARALLEL_TREES_MAX:-4}"
     local run_sh_debug="${RUN_SH_DEBUG:-false}"
@@ -581,11 +581,11 @@ run_all_trees_cli_parse_args() {
                 run_sh_command_analyze_mode="${1#*=}"
                 shift
                 ;;
-            trees=true|TREES=true|tees=true|TEES=true)
+            --tree|--tree=true|--trees|--trees=true|tree=true|TREE=true|trees=true|TREES=true|tees=true|TEES=true)
                 trees_mode=true
                 shift
                 ;;
-            trees=false|TREES=false|tees=false|TEES=false)
+            --tree=false|--trees=false|tree=false|TREE=false|trees=false|TREES=false|tees=false|TEES=false)
                 trees_mode=false
                 force_main_mode=true
                 shift

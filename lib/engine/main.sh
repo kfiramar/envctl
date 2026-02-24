@@ -5,6 +5,7 @@
 #
 # Usage:
 #   ./run.sh                    # Run main project only (default; configurable via ENVCTL_DEFAULT_MODE)
+#   ./run.sh --tree             # Run all trees (alias: --trees)
 #   ./run.sh main=true          # Run main project only
 #   ./run.sh --main             # Run main project only (explicit)
 #   ./run.sh trees=false        # Run main project only
@@ -165,7 +166,7 @@ RUN_SH_OPT_PORT_SNAPSHOT="${RUN_SH_OPT_PORT_SNAPSHOT:-${RUN_SH_PORT_SNAPSHOT:-fa
 RUN_SH_OPT_FAST_REQUIREMENTS="${RUN_SH_OPT_FAST_REQUIREMENTS:-${RUN_SH_FAST_REQUIREMENTS:-false}}"
 RUN_SH_OPT_SKIP_NOOP_DEP_INSTALL="${RUN_SH_OPT_SKIP_NOOP_DEP_INSTALL:-false}"
 RUN_SH_OPT_SKIP_NOOP_MIGRATIONS="${RUN_SH_OPT_SKIP_NOOP_MIGRATIONS:-false}"
-RUN_SH_OPT_PARALLEL_TREES="${RUN_SH_OPT_PARALLEL_TREES:-false}"
+RUN_SH_OPT_PARALLEL_TREES="${RUN_SH_OPT_PARALLEL_TREES:-true}"
 RUN_SH_OPT_PARALLEL_TREES_EXPLICIT="${RUN_SH_OPT_PARALLEL_TREES_EXPLICIT:-false}"
 RUN_SH_OPT_PARALLEL_TREES_MAX="${RUN_SH_OPT_PARALLEL_TREES_MAX:-4}"
 

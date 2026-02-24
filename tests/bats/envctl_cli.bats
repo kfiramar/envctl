@@ -44,6 +44,7 @@ SCRIPT
   [[ "$output" == *"Repo Root:"* ]]
   [[ "$output" == *"Engine Path:"* ]]
   [[ "$output" == *"reachable"* ]]
+  [[ "$output" == *"lib/engine/main.sh"* ]]
 }
 
 @test "envctl doctor works for git repo without .envctl or legacy scripts" {
@@ -69,7 +70,7 @@ SCRIPT
   [[ "$output" == *"Repo Root:"* ]]
 }
 
-@test "envctl prefers run_engine.sh over run.sh when both exist" {
+@test "envctl ignores repo run scripts and uses envctl engine by default" {
   run bash -lc '
     tmp=$(mktemp -d)
     mkdir -p "$tmp/repo/.git" "$tmp/repo/utils"
@@ -82,26 +83,27 @@ SCRIPT
 echo "from-run-engine"
 SCRIPT
     chmod +x "$tmp/repo/utils/run.sh" "$tmp/repo/utils/run_engine.sh"
-    "$0" --repo "$tmp/repo" dashboard
+    "$0" --repo "$tmp/repo" doctor
   ' "$BIN"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"from-run-engine"* ]]
+  [[ "$output" == *"lib/engine/main.sh"* ]]
   [[ "$output" != *"from-run-sh"* ]]
+  [[ "$output" != *"from-run-engine"* ]]
 }
 
-@test "envctl forwards args to repo engine and sets launcher env vars" {
+@test "envctl forwards args to selected engine and sets launcher env vars" {
   run bash -lc '
     tmp=$(mktemp -d)
-    mkdir -p "$tmp/repo/.git" "$tmp/repo/utils"
-    cat > "$tmp/repo/utils/run.sh" <<"SCRIPT"
+    mkdir -p "$tmp/repo/.git" "$tmp/custom-root/lib/engine"
+    cat > "$tmp/custom-root/lib/engine/main.sh" <<"SCRIPT"
 #!/usr/bin/env bash
 echo "launcher=${RUN_LAUNCHER_NAME:-}"
 echo "context=${RUN_LAUNCHER_CONTEXT:-}"
 echo "args:$*"
 exit 7
 SCRIPT
-    chmod +x "$tmp/repo/utils/run.sh"
-    "$0" --repo "$tmp/repo" resume trees=true
+    chmod +x "$tmp/custom-root/lib/engine/main.sh"
+    ENVCTL_ROOT_DIR="$tmp/custom-root" "$0" --repo "$tmp/repo" resume trees=true
   ' "$BIN"
   [ "$status" -eq 7 ]
   [[ "$output" == *"launcher=envctl"* ]]
@@ -112,32 +114,22 @@ SCRIPT
 @test "envctl supports --repo=<path> form" {
   run bash -lc '
     tmp=$(mktemp -d)
-    mkdir -p "$tmp/repo/.git" "$tmp/repo/utils"
-    cat > "$tmp/repo/utils/run.sh" <<"SCRIPT"
-#!/usr/bin/env bash
-echo "equal-form"
-SCRIPT
-    chmod +x "$tmp/repo/utils/run.sh"
-    "$0" --repo="$tmp/repo" dashboard
+    mkdir -p "$tmp/repo/.git"
+    "$0" --repo="$tmp/repo" doctor
   ' "$BIN"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"equal-form"* ]]
+  [[ "$output" == *"Repo Root:"* ]]
 }
 
 @test "envctl auto-detects repo from current directory" {
   run bash -lc '
     tmp=$(mktemp -d)
-    mkdir -p "$tmp/repo/.git" "$tmp/repo/utils" "$tmp/repo/sub/dir"
-    cat > "$tmp/repo/utils/run.sh" <<"SCRIPT"
-#!/usr/bin/env bash
-echo "ok-auto"
-SCRIPT
-    chmod +x "$tmp/repo/utils/run.sh"
+    mkdir -p "$tmp/repo/.git" "$tmp/repo/sub/dir"
     cd "$tmp/repo/sub/dir" || exit 1
-    "$0" dashboard
+    "$0" doctor
   ' "$BIN"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ok-auto"* ]]
+  [[ "$output" == *"Repo Root:"* ]]
 }
 
 @test "envctl install --dry-run prints block and does not mutate shell file" {

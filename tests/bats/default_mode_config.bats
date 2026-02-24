@@ -32,6 +32,32 @@ setup() {
   [[ "$output" == *"trees=true main=false errs=0"* ]]
 }
 
+@test "--tree alias enables trees mode" {
+  run bash -lc '
+    unset TREES MAIN ENVCTL_DEFAULT_MODE
+    source "$0"
+    run_all_trees_cli_init_config --tree
+    run_all_trees_cli_parse_args --tree
+    echo "trees=$TREES_MODE main=$MAIN_MODE errs=${#RUN_ALL_TREES_ARG_ERRORS[@]}"
+  ' "$CLI_LIB"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"trees=true main=false errs=0"* ]]
+}
+
+@test "--trees alias enables trees mode" {
+  run bash -lc '
+    unset TREES MAIN ENVCTL_DEFAULT_MODE
+    source "$0"
+    run_all_trees_cli_init_config --trees
+    run_all_trees_cli_parse_args --trees
+    echo "trees=$TREES_MODE main=$MAIN_MODE errs=${#RUN_ALL_TREES_ARG_ERRORS[@]}"
+  ' "$CLI_LIB"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"trees=true main=false errs=0"* ]]
+}
+
 @test "explicit --main overrides ENVCTL_DEFAULT_MODE=trees" {
   run bash -lc '
     unset TREES MAIN
